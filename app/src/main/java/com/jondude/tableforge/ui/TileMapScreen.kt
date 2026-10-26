@@ -230,6 +230,7 @@ private fun MapWorkspace(
                 selection = selection,
                 selectedFeatureId = selectedFeatureId,
                 recenterKey = recenter,
+                allowMove = mode == MapMode.ASK,
                 onCellTap = onCellTap,
                 onAreaSelected = { r ->
                     selectedFeatureId = null
@@ -362,6 +363,7 @@ private fun MapCanvas(
     selection: GridRect?,
     selectedFeatureId: Long?,
     recenterKey: Int,
+    allowMove: Boolean,
     onCellTap: (Int, Int) -> Unit,
     onAreaSelected: (GridRect) -> Unit,
     onFeatureMoved: (MapFeature, Int, Int) -> Unit,
@@ -393,6 +395,7 @@ private fun MapCanvas(
     val tap by rememberUpdatedState(onCellTap)
     val area by rememberUpdatedState(onAreaSelected)
     val moved by rememberUpdatedState(onFeatureMoved)
+    val canMove by rememberUpdatedState(allowMove)
 
     fun cellAt(p: Offset): Pair<Int, Int>? {
         val x = floor((p.x - marginPx) / cellPx).toInt()
@@ -423,19 +426,22 @@ private fun MapCanvas(
         Box(
             Modifier
                 .wrapContentSize(align = Alignment.TopStart, unbounded = true)
-                .requiredSize(with(density) { contentW.toDp() }, with(density) { contentH.toDp() })
+                // The zoom layer must wrap the full-size content so hit testing happens
+                // in map coordinates; otherwise zoomed-in taps near the edges are dropped.
                 .graphicsLayer {
                     transformOrigin = TransformOrigin(0f, 0f)
                     scaleX = scale; scaleY = scale
                     translationX = offset.x; translationY = offset.y
                 }
+                .requiredSize(with(density) { contentW.toDp() }, with(density) { contentH.toDp() })
                 .pointerInputTaps(map.id) { p -> cellAt(p)?.let { (x, y) -> tap(x, y) } }
                 .pointerInputLongDrag(
                     key = map.id,
                     onStart = { p ->
                         val c = cellAt(p)
                         if (c != null) {
-                            val hit = currentFeatures.lastOrNull { c.first in it.x until it.x + it.w && c.second in it.y until it.y + it.h }
+                            val hit = if (!canMove) null
+                            else currentFeatures.lastOrNull { c.first in it.x until it.x + it.w && c.second in it.y until it.y + it.h }
                             moving = hit
                             dragStart = c; dragNow = c
                         }

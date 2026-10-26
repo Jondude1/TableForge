@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,6 +80,9 @@ import kotlin.math.roundToInt
 
 private const val NODE_W = 180f
 private const val NODE_H = 68f
+private const val BOARD_DP = 4000f
+
+private fun clampToBoard(p: Offset) = Offset(p.x.coerceIn(0f, BOARD_DP - NODE_W), p.y.coerceIn(0f, BOARD_DP - NODE_H))
 
 @Composable
 fun ConceptMapScreen(vm: AppViewModel, wide: Boolean) {
@@ -101,7 +106,7 @@ fun ConceptMapScreen(vm: AppViewModel, wide: Boolean) {
     fun posOf(n: MapNode): Offset = live[n.id] ?: Offset(n.x, n.y)
 
     /** Screen point -> map coordinates (dp). */
-    fun toMap(p: Offset): Offset = with(density) { Offset((p.x - pan.x) / scale / density.density, (p.y - pan.y) / scale / density.density) }
+    fun toMap(p: Offset): Offset = clampToBoard(Offset((p.x - pan.x) / scale / density.density - NODE_W / 2, (p.y - pan.y) / scale / density.density - NODE_H / 2))
 
     val canvas: @Composable (Modifier) -> Unit = { mod ->
         val nodesNow by rememberUpdatedState(nodes)
@@ -137,12 +142,14 @@ fun ConceptMapScreen(vm: AppViewModel, wide: Boolean) {
             }
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .wrapContentSize(align = Alignment.TopStart, unbounded = true)
                     .graphicsLayer {
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = scale; scaleY = scale
                         translationX = pan.x; translationY = pan.y
-                    },
+                    }
+                    // A large fixed board so every concept stays inside the hit-testable area.
+                    .requiredSize(BOARD_DP.dp, BOARD_DP.dp),
             ) {
                 // Links
                 Canvas(Modifier.fillMaxSize()) {
@@ -207,7 +214,7 @@ fun ConceptMapScreen(vm: AppViewModel, wide: Boolean) {
                                     onDrag = { change, delta ->
                                         change.consume()
                                         val cur = live[n.id] ?: Offset(n.x, n.y)
-                                        live[n.id] = cur + Offset(delta.x / density.density, delta.y / density.density)
+                                        live[n.id] = clampToBoard(cur + Offset(delta.x / density.density, delta.y / density.density))
                                     },
                                     onDragEnd = {
                                         live[n.id]?.let { vm.moveNode(n.id, it.x, it.y) }

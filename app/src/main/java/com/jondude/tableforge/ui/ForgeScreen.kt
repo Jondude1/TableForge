@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -135,7 +136,7 @@ fun ForgeScreen(vm: AppViewModel, wide: Boolean) {
         }
     } else {
         Column(Modifier.fillMaxSize()) {
-            Column(Modifier.padding(16.dp)) { controls() }
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()).padding(16.dp)) { controls() }
             results(Modifier.weight(1f))
         }
     }

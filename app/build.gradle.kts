@@ -17,11 +17,24 @@ android {
         versionName = "1.0.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
     }
 
+    // One permanent key so every new build installs over the previous one (in-app updates).
+    // It lives in the repo on purpose: this app is sideloaded, not on the Play Store.
+    signingConfigs {
+        create("tableforge") {
+            storeFile = rootProject.file("keystore/tableforge.jks")
+            storePassword = "tableforge"
+            keyAlias = "tableforge"
+            keyPassword = "tableforge"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so the APK can be sideloaded directly.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("tableforge")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("tableforge")
         }
     }
 
@@ -34,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

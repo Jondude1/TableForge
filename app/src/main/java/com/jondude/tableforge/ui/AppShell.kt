@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jondude.tableforge.AppViewModel
+import com.jondude.tableforge.update.AutoUpdateCheck
+import com.jondude.tableforge.update.UpdateBanner
 import com.jondude.tableforge.R
 import androidx.compose.ui.res.painterResource
 
@@ -115,6 +117,8 @@ fun AppShell(vm: AppViewModel = viewModel()) {
                     }
                 }
                 Column(Modifier.fillMaxSize()) {
+                    AutoUpdateCheck()
+                    UpdateBanner()
                     CampaignBar(vm, showSettings = !wide, onSettings = { tab = AppTab.SETTINGS })
                     if (!wide) {
                         val tabs = AppTab.entries.filter { it != AppTab.SETTINGS }

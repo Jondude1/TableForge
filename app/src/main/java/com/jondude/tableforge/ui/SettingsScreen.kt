@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jondude.tableforge.AppViewModel
+import com.jondude.tableforge.update.UpdateSettings
 import com.jondude.tableforge.data.AiProvider
 import com.jondude.tableforge.data.AiSettings
 
@@ -143,6 +144,8 @@ fun SettingsScreen(vm: AppViewModel) {
                     TextButton(onClick = { deleting = true }) { Text("Delete this campaign…", color = MaterialTheme.colorScheme.error) }
                 }
             }
+
+            SettingsCard("App updates") { UpdateSettings() }
 
             SettingsCard("About") {
                 Text("TableForge $version", style = MaterialTheme.typography.titleMedium)

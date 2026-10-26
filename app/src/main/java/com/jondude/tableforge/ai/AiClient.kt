@@ -29,7 +29,7 @@ object AiClient {
         val body = JSONObject()
             .put("model", s.claudeModel.ifBlank { AiSettings.DEFAULT_CLAUDE_MODEL })
             .put("max_tokens", maxTokens)
-            .put("temperature", s.creativity.toDouble().coerceIn(0.0, 1.0))
+            // No temperature: newer Claude models reject it ("temperature is deprecated").
             .put("system", system)
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", user)))
         val json = post(

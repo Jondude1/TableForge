@@ -114,7 +114,7 @@ fun SettingsScreen(vm: AppViewModel) {
                     }
                     AiProvider.OFFLINE -> Unit
                 }
-                if (draft.provider != AiProvider.OFFLINE) {
+                if (draft.provider == AiProvider.OLLAMA) {
                     Text("Creativity: ${"%.1f".format(draft.creativity)}", style = MaterialTheme.typography.bodyMedium)
                     Slider(draft.creativity, { draft = draft.copy(creativity = it) }, valueRange = 0.2f..1f)
                 }

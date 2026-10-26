@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext is allowed so the app can reach a local Ollama server
+     (e.g. http://obelisk:11434 over Tailscale or the home LAN). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

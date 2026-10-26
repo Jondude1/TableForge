@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.TableForge" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+    </style>
+    <color name="bg">#16120E</color>
+    <color name="ic_bg">#2A1F17</color>
+    <color name="ic_fg">#D9A441</color>
+</resources>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A d20 silhouette: hexagon outline with the inner triangle facets. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="@color/ic_fg"
+        android:strokeWidth="3.5"
+        android:strokeLineJoin="round"
+        android:pathData="M54,28 L76.5,41 L76.5,67 L54,80 L31.5,67 L31.5,41 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="@color/ic_fg"
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:pathData="M54,36 L69,62 L39,62 Z M54,28 L54,36 M76.5,41 L54,36 M31.5,41 L54,36 M76.5,67 L69,62 M31.5,67 L39,62 M54,80 L69,62 M54,80 L39,62 M76.5,41 L69,62 M31.5,41 L39,62" />
+</vector>

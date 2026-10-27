@@ -79,6 +79,13 @@ fun AppShell(vm: AppViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(AppTab.FORGE) }
     val snackbar = remember { SnackbarHostState() }
     val toast by vm.toast.collectAsStateWithLifecycle()
+    val navigate by vm.navigate.collectAsStateWithLifecycle()
+
+    LaunchedEffect(navigate) {
+        when (navigate) {
+            "forge" -> { tab = AppTab.FORGE; vm.navigated() }
+        }
+    }
 
     LaunchedEffect(toast) {
         toast?.let {

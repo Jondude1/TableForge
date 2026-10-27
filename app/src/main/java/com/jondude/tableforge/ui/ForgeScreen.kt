@@ -27,6 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import com.jondude.tableforge.OwnIdea
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkAdded
 import androidx.compose.material.icons.outlined.Close
@@ -74,9 +77,16 @@ fun ForgeScreen(vm: AppViewModel, wide: Boolean) {
     val type by vm.forgeType.collectAsStateWithLifecycle()
     var steer by rememberSaveable { mutableStateOf("") }
     var count by rememberSaveable { mutableIntStateOf(4) }
+    val ownMode by vm.ownMode.collectAsStateWithLifecycle()
+    val own by vm.own.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf<Card?>(null) }
 
     val controls: @Composable () -> Unit = {
         ForgeControls(
+            ownMode = ownMode,
+            onOwnMode = vm::setOwnMode,
+            own = own,
+            onOwn = vm::updateOwn,
             type = type,
             onType = vm::setForgeType,
             count = count,
@@ -86,7 +96,7 @@ fun ForgeScreen(vm: AppViewModel, wide: Boolean) {
             hasCards = state.cards.isNotEmpty(),
             keptCount = state.kept.size,
             loading = state.loading,
-            onGenerate = { vm.forgeGenerate(count, steer) },
+            onGenerate = { if (ownMode) vm.forgeFleshOut() else vm.forgeGenerate(count, steer) },
             onClear = vm::forgeClear,
         )
     }
@@ -96,7 +106,11 @@ fun ForgeScreen(vm: AppViewModel, wide: Boolean) {
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             state.error?.let { ErrorBanner(it) }
             if (state.cards.isEmpty() && !state.loading) {
-                EmptyState(
+                if (ownMode) EmptyState(
+                    Icons.Outlined.Edit,
+                    "Flesh out your ${type.singular}",
+                    "Give it a name and whatever you already know. Claude keeps your details exactly and fills in the rest. Edit anything before you save it.",
+                ) else EmptyState(
                     Icons.Outlined.AutoAwesome,
                     "Forge some ${type.label.lowercase()}",
                     "Pick a type, add what you're looking for, and generate. Pin the ones you like, then regenerate the rest until everything fits.",
@@ -118,12 +132,29 @@ fun ForgeScreen(vm: AppViewModel, wide: Boolean) {
                             busy = state.loading,
                             onKeep = { vm.forgeToggleKeep(card) },
                             onSave = { vm.forgeSave(card) },
-                            onReroll = { vm.forgeRegenerateOne(card, steer) },
+                            onReroll = { if (ownMode) vm.forgeFleshOut(card) else vm.forgeRegenerateOne(card, steer) },
                             onDiscard = { vm.forgeDiscard(card) },
+                            onEdit = { editing = card },
+                            saveLabel = if (ownMode && own.ideaId != null) "Update" else "Save",
                         )
                     }
                 }
             }
+        }
+    }
+
+    editing?.let { c ->
+        var title by remember(c.key) { mutableStateOf(c.title) }
+        var body by remember(c.key) { mutableStateOf(c.body) }
+        FormDialog(
+            title = "Edit before saving",
+            onDismiss = { editing = null },
+            onSave = { vm.forgeEditCard(c, title.trim(), body.trim()); editing = null },
+            saveEnabled = title.isNotBlank(),
+        ) {
+            Field(title, { title = it }, "Title")
+            Field(body, { body = it }, "Details", singleLine = false, minLines = 8)
+            Text("Keep \"Label: text\" lines to get the tidy layout.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -145,6 +176,10 @@ fun ForgeScreen(vm: AppViewModel, wide: Boolean) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ForgeControls(
+    ownMode: Boolean,
+    onOwnMode: (Boolean) -> Unit,
+    own: OwnIdea,
+    onOwn: (OwnIdea) -> Unit,
     type: IdeaType,
     onType: (IdeaType) -> Unit,
     count: Int,
@@ -159,6 +194,12 @@ private fun ForgeControls(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("The Forge", style = MaterialTheme.typography.headlineSmall)
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            SegmentedButton(selected = !ownMode, onClick = { onOwnMode(false) }, shape = SegmentedButtonDefaults.itemShape(0, 2),
+                icon = { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp)) }) { Text("Brainstorm") }
+            SegmentedButton(selected = ownMode, onClick = { onOwnMode(true) }, shape = SegmentedButtonDefaults.itemShape(1, 2),
+                icon = { Icon(Icons.Outlined.Edit, null, Modifier.size(16.dp)) }) { Text("Flesh out mine") }
+        }
         SectionLabel("What to make")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             IdeaType.generatable.forEach { t ->
@@ -170,39 +211,63 @@ private fun ForgeControls(
                 )
             }
         }
-        SectionLabel("How many")
-        val counts = listOf(1, 3, 4, 6, 8)
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            counts.forEachIndexed { i, n ->
-                SegmentedButton(
-                    selected = count == n,
-                    onClick = { onCount(n) },
-                    shape = SegmentedButtonDefaults.itemShape(i, counts.size),
-                ) { Text("$n") }
+        if (!ownMode) {
+            SectionLabel("How many")
+            val counts = listOf(1, 3, 4, 6, 8)
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                counts.forEachIndexed { i, n ->
+                    SegmentedButton(
+                        selected = count == n,
+                        onClick = { onCount(n) },
+                        shape = SegmentedButtonDefaults.itemShape(i, counts.size),
+                    ) { Text("$n") }
+                }
+            }
+            SectionLabel("What you're looking for")
+            Field(
+                steer, onSteer, "Details, constraints, vibe",
+                singleLine = false, minLines = 3,
+                placeholder = "e.g. a dwarf merchant who secretly works for the cult",
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                VIBES.forEach { v ->
+                    val on = steer.contains(v, ignoreCase = true)
+                    FilterChip(
+                        selected = on,
+                        onClick = {
+                            onSteer(
+                                if (on) steer.replace(v, "", ignoreCase = true).replace(Regex(",\\s*,"), ",").trim(' ', ',')
+                                else listOf(steer.trim(), v).filter { it.isNotBlank() }.joinToString(", "),
+                            )
+                        },
+                        label = { Text(v) },
+                    )
+                }
+            }
+        } else {
+            if (own.ideaId != null) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f), shape = RoundedCornerShape(10.dp)) {
+                    Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Fleshing out a saved idea. Saving updates it.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { onOwn(own.copy(ideaId = null)) }) { Text("Save as new") }
+                    }
+                }
+            }
+            Field(own.name, { onOwn(own.copy(name = it)) }, "Name", placeholder = if (type == IdeaType.NPC) "e.g. Marta Vey" else "Leave blank to have one invented")
+            Field(own.notes, { onOwn(own.copy(notes = it)) }, "What you already know", singleLine = false, minLines = 4, placeholder = ownHint(type))
+            Text("Everything you write here is kept exactly. Claude only fills in what's missing.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SectionLabel("Versions to compare")
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                (1..3).forEach { n ->
+                    SegmentedButton(selected = own.versions == n, onClick = { onOwn(own.copy(versions = n)) }, shape = SegmentedButtonDefaults.itemShape(n - 1, 3)) { Text("$n") }
+                }
             }
         }
-        SectionLabel("What you're looking for")
-        Field(
-            steer, onSteer, "Details, constraints, vibe",
-            singleLine = false, minLines = 3,
-            placeholder = "e.g. a dwarf merchant who secretly works for the cult",
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            VIBES.forEach { v ->
-                val on = steer.contains(v, ignoreCase = true)
-                FilterChip(
-                    selected = on,
-                    onClick = {
-                        onSteer(
-                            if (on) steer.replace(v, "", ignoreCase = true).replace(Regex(",\\s*,"), ",").trim(' ', ',')
-                            else listOf(steer.trim(), v).filter { it.isNotBlank() }.joinToString(", "),
-                        )
-                    },
-                    label = { Text(v) },
-                )
-            }
-        }
-        Button(onClick = onGenerate, enabled = !loading, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+        Button(
+            onClick = onGenerate,
+            enabled = !loading && (!ownMode || own.name.isNotBlank() || own.notes.isNotBlank()),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+        ) {
             if (loading) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
             } else {
@@ -210,6 +275,9 @@ private fun ForgeControls(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     when {
+                        ownMode && !hasCards -> "Flesh it out"
+                        ownMode && keptCount > 0 -> "Try again (keep pinned)"
+                        ownMode -> "Try again"
                         !hasCards -> "Generate"
                         keptCount > 0 -> "Regenerate unpinned"
                         else -> "Regenerate all"
@@ -236,6 +304,8 @@ fun IdeaCard(
     onReroll: (() -> Unit)?,
     onDiscard: () -> Unit,
     extraAction: (@Composable () -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
+    saveLabel: String = "Save",
 ) {
     val accent = type.color()
     M3Card(
@@ -273,13 +343,14 @@ fun IdeaCard(
                 if (onReroll != null) {
                     IconButton(onClick = onReroll, enabled = !busy) { Icon(Icons.Outlined.Refresh, "Regenerate this one") }
                 }
+                if (onEdit != null) IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "Edit before saving") }
                 IconButton(onClick = onDiscard) { Icon(Icons.Outlined.Close, "Discard") }
                 Spacer(Modifier.weight(1f))
                 extraAction?.invoke()
                 TextButton(onClick = onSave, enabled = !saved) {
                     Icon(if (saved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(if (saved) "Saved" else "Save")
+                    Text(if (saved) "Saved" else saveLabel)
                 }
             }
         }
@@ -295,4 +366,14 @@ fun ErrorBanner(message: String) {
     ) {
         Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(12.dp))
     }
+}
+
+private fun ownHint(type: IdeaType) = when (type) {
+    IdeaType.NPC -> "e.g. Half-orc, runs the Gilded Eel tavern. Gruff but fair. Secretly owes the thieves' guild."
+    IdeaType.EVENT -> "e.g. The harvest festival is interrupted when the bell tower collapses during the opening speech."
+    IdeaType.LOCATION -> "e.g. A lighthouse on a sea stack, reachable only at low tide. The keeper vanished a month ago."
+    IdeaType.DUNGEON_ROOM -> "e.g. A flooded chapel with a drowned choir that still sings at midnight."
+    IdeaType.MAGIC_ITEM -> "e.g. A compass that points to whatever the holder fears most. Rare, needs attunement."
+    IdeaType.STORY_BEAT -> "e.g. The party learns the mayor they've been helping is the cult leader."
+    IdeaType.NOTE -> ""
 }

@@ -58,6 +58,9 @@ data class MapRequestState(val loading: Boolean = false, val error: String? = nu
 
 private data class MapUndo(val mapId: Long, val terrain: String, val addedIds: List<Long>, val removed: List<MapFeature>)
 
+/** An idea the DM already has. ideaId is set when it came from the Ideas tab (saving updates it). */
+data class OwnIdea(val name: String = "", val notes: String = "", val versions: Int = 1, val ideaId: Long? = null)
+
 /** Where gap suggestions will be inserted in the outline. */
 data class GapAnchor(val beforeId: Long?, val afterId: Long?)
 
@@ -196,6 +199,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Brainstorm new ideas, or flesh out one the DM already has. */
+    private val _ownMode = MutableStateFlow(false)
+    val ownMode: StateFlow<Boolean> = _ownMode.asStateFlow()
+    private val _own = MutableStateFlow(OwnIdea())
+    val own: StateFlow<OwnIdea> = _own.asStateFlow()
+
+    fun setOwnMode(on: Boolean) {
+        if (on != _ownMode.value) { _ownMode.value = on; _forge.value = SuggestionState() }
+    }
+
+    fun updateOwn(o: OwnIdea) { _own.value = o }
+
+    /** Opens a saved idea in the Forge to flesh it out; saving then updates that idea. */
+    fun fleshOutIdea(i: Idea) {
+        _forgeType.value = i.ideaType.takeIf { it in IdeaType.generatable } ?: IdeaType.NPC
+        _own.value = OwnIdea(name = i.title, notes = i.body, versions = 1, ideaId = i.id)
+        _ownMode.value = true
+        _forge.value = SuggestionState()
+        _navigate.value = "forge"
+    }
+
+    private val _navigate = MutableStateFlow<String?>(null)
+    val navigate: StateFlow<String?> = _navigate.asStateFlow()
+    fun navigated() { _navigate.value = null }
+
+    /** Flesh out mode: keep the DM's name and notes, fill in the rest. Pinned versions are kept. */
+    fun forgeFleshOut(replace: Card? = null) {
+        val ctx = context() ?: return
+        val type = _forgeType.value
+        val o = _own.value
+        val current = _forge.value
+        val keptCards = current.cards.filter { it.key in current.kept }
+        val need = if (replace != null) 1 else (o.versions - keptCards.size).coerceAtLeast(1)
+        val avoid = current.cards.map { it.body.lines().take(2).joinToString(" ").take(120) }
+        _forge.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val fresh = Forge.fleshOut(ai.value, ctx, type, o.name, o.notes, need, avoid)
+                _forge.update { s ->
+                    if (replace != null) s.copy(cards = s.cards.map { if (it.key == replace.key) fresh.first() else it }, loading = false)
+                    else s.copy(cards = keptCards + fresh, loading = false)
+                }
+            } catch (e: Exception) {
+                _forge.update { it.copy(loading = false, error = friendly(e)) }
+            }
+        }
+    }
+
+    /** Lets the DM edit a generated card before saving it. */
+    fun forgeEditCard(card: Card, title: String, body: String) = _forge.update { s ->
+        s.copy(cards = s.cards.map { if (it.key == card.key) it.copy(title = title, body = body) else it }, saved = s.saved - card.key)
+    }
+
     /** Regenerates everything except the cards the DM pinned with "keep". */
     fun forgeGenerate(count: Int, steer: String) {
         val ctx = context() ?: return
@@ -240,10 +296,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun forgeSave(card: Card) {
         val id = campaignId.value
         val type = _forgeType.value
+        val ownMode = _ownMode.value
+        val existingId = _own.value.ideaId.takeIf { ownMode }
         viewModelScope.launch {
-            db.ideas().upsert(Idea(campaignId = id, type = type.name, title = card.title, body = card.body, tags = card.tags))
+            val existing = existingId?.let { eid -> ideas.value.firstOrNull { it.id == eid } }
+            if (existing != null) {
+                db.ideas().upsert(existing.copy(type = type.name, title = card.title, body = card.body, tags = card.tags.ifBlank { existing.tags }))
+                toast("Updated ${card.title} in Ideas")
+            } else {
+                db.ideas().upsert(Idea(campaignId = id, type = type.name, title = card.title, body = card.body, tags = card.tags, isOwn = ownMode))
+                toast("Saved to Ideas")
+            }
             _forge.update { it.copy(saved = it.saved + card.key) }
-            toast("Saved to Ideas")
         }
     }
 

@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -138,6 +140,7 @@ fun IdeasScreen(vm: AppViewModel, wide: Boolean) {
             onDismiss = { editing = null },
             onSave = { vm.saveIdea(it); editing = null },
             onDelete = if (i.id != 0L) ({ editing = null; deleting = i }) else null,
+            onFleshOut = if (i.id != 0L && i.ideaType in IdeaType.generatable) ({ editing = null; vm.fleshOutIdea(i) }) else null,
             onToOutline = if (i.id != 0L) ({ vm.ideaToOutline(i); editing = null }) else null,
             onToMap = if (i.id != 0L) ({ vm.ideaToMap(i); editing = null }) else null,
             onToLoot = if (i.id != 0L && i.ideaType == IdeaType.MAGIC_ITEM) ({ vm.ideaToLoot(i); editing = null }) else null,
@@ -186,6 +189,7 @@ private fun IdeaDialog(
     onDismiss: () -> Unit,
     onSave: (Idea) -> Unit,
     onDelete: (() -> Unit)?,
+    onFleshOut: (() -> Unit)?,
     onToOutline: (() -> Unit)?,
     onToMap: (() -> Unit)?,
     onToLoot: (() -> Unit)?,
@@ -211,6 +215,11 @@ private fun IdeaDialog(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { used = !used }) {
             Checkbox(checked = used, onCheckedChange = { used = it })
             Text("Already used in a session")
+        }
+        if (onFleshOut != null) {
+            OutlinedButton(onClick = onFleshOut, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Flesh out in the Forge")
+            }
         }
         if (onToOutline != null || onToMap != null || onToLoot != null) {
             SectionLabel("Send to")

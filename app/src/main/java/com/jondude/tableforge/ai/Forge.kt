@@ -66,7 +66,7 @@ object Forge {
 
     private const val SYSTEM = """You are a creative assistant for a Dungeons & Dragons 5e Dungeon Master preparing sessions.
 Give vivid, specific, table-ready ideas a DM can use immediately. Avoid generic fantasy clichés unless asked.
-Keep each idea consistent with the campaign details provided. Never reuse names already established.
+Keep each idea consistent with the campaign details provided. Don't reuse names already established, unless the DM names a specific character or place, in which case use exactly that name.
 Always reply with JSON only, in exactly this shape: {"items":[{"title":"...","body":"...","tags":"..."}]}
 "body" is plain text using short labeled lines separated by \n. "tags" is 1-4 comma-separated keywords."""
 
@@ -78,6 +78,44 @@ Always reply with JSON only, in exactly this shape: {"items":[{"title":"...","bo
         IdeaType.MAGIC_ITEM -> "title = the item name. body lines: Rarity, Attunement (yes/no and by whom), Appearance, Properties (5e mechanics), Quirk, History."
         IdeaType.STORY_BEAT -> "title = a short beat name. body lines: What happens, Why it matters, Connects to (existing beats/NPCs), Foreshadowing, Player choice."
         IdeaType.NOTE -> "title = a short name. body = a few useful lines."
+    }
+
+    private const val FLESH_SYSTEM = """You help a Dungeons & Dragons 5e Dungeon Master flesh out an idea they have already started.
+The DM's details are canon: keep every name exactly as written (spelling included), keep every fact they gave, and never contradict them.
+Fill in everything they left open so the result is vivid, specific and table-ready, and consistent with the campaign.
+Weave the DM's details into the labeled lines where they belong rather than repeating them in a list.
+When asked for several versions, keep the DM's details identical in each and vary only what they left open.
+Always reply with JSON only, in exactly this shape: {"items":[{"title":"...","body":"...","tags":"..."}]}
+"body" is plain text using short labeled lines separated by \n. "tags" is 1-4 comma-separated keywords."""
+
+    /** Expands an idea the DM already has (a name, a few facts) without changing what they gave. */
+    suspend fun fleshOut(
+        settings: AiSettings,
+        ctx: CampaignContext,
+        type: IdeaType,
+        name: String,
+        notes: String,
+        versions: Int,
+        avoid: List<String> = emptyList(),
+    ): List<Card> {
+        if (settings.provider == AiProvider.OFFLINE) {
+            return OfflineForge.generate(type, versions).map { c ->
+                val noteLines = notes.lines().map { it.trim() }.filter { it.isNotEmpty() }.map { if (':' in it) it else "Notes: $it" }
+                Card(name.trim().ifBlank { c.title }, (noteLines + c.body).joinToString("\n"), c.tags)
+            }
+        }
+        val user = buildString {
+            appendLine(ctx.describe())
+            appendLine()
+            appendLine("Flesh out this ${type.singular}${if (versions > 1) ", as $versions different versions" else ""}.")
+            appendLine(if (name.isNotBlank()) "Name (use exactly as the title): ${name.trim()}" else "Name: not decided — invent a fitting one.")
+            appendLine(if (notes.isNotBlank()) "What the DM already knows:\n${notes.trim()}" else "The DM has no other details yet.")
+            appendLine(shape(type))
+            if (avoid.isNotEmpty()) appendLine("Make it clearly different from these earlier versions: ${avoid.joinToString("; ")}")
+        }
+        val cards = toCards(AiClient.complete(settings, FLESH_SYSTEM, user)).take(versions)
+        // The DM's name is canon even if the model drifts.
+        return if (name.isNotBlank()) cards.map { it.copy(title = name.trim()) } else cards
     }
 
     suspend fun generate(

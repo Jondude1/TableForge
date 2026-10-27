@@ -200,3 +200,21 @@ interface TileMapDao {
     @Delete
     suspend fun deleteFeature(f: MapFeature)
 }
+
+@Dao
+interface MonsterDao {
+    @Query("SELECT * FROM monsters WHERE campaignId = :campaignId ORDER BY name COLLATE NOCASE")
+    fun forCampaign(campaignId: Long): Flow<List<Monster>>
+
+    @Upsert
+    suspend fun upsert(m: Monster): Long
+
+    @Query("UPDATE monsters SET hpNow = :hp WHERE id = :id")
+    suspend fun setHp(id: Long, hp: Int?)
+
+    @Delete
+    suspend fun delete(m: Monster)
+
+    @Query("DELETE FROM monsters WHERE campaignId = :campaignId")
+    suspend fun deleteForCampaign(campaignId: Long)
+}

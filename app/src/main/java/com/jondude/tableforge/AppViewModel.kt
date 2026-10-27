@@ -10,6 +10,10 @@ import com.jondude.tableforge.ai.Card
 import com.jondude.tableforge.ai.Forge
 import com.jondude.tableforge.ai.GridRect
 import com.jondude.tableforge.ai.MapForge
+import com.jondude.tableforge.ai.ImagePart
+import com.jondude.tableforge.ai.MonsterForge
+import com.jondude.tableforge.ai.StatBlock
+import com.jondude.tableforge.data.Monster
 import com.jondude.tableforge.data.MapFeature
 import com.jondude.tableforge.data.Terrain
 import com.jondude.tableforge.data.TileMap
@@ -81,6 +85,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val nodes = perCampaign(emptyList()) { db.map().nodes(it) }
     val edges = perCampaign(emptyList()) { db.map().edges(it) }
     val tileMaps = perCampaign(emptyList()) { db.tiles().maps(it) }
+    val monsters = perCampaign(emptyList()) { db.monsters().forCampaign(it) }
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
@@ -161,6 +166,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteCampaign(c: Campaign) = viewModelScope.launch {
         db.tables().deleteForCampaign(c.id)
+        db.monsters().deleteForCampaign(c.id)
         db.campaigns().delete(c)
         val next = db.campaigns().first()
         if (next != null) store.setCampaign(next.id)
@@ -525,4 +531,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         db.ideas().upsert(Idea(campaignId = campaignId.value, type = IdeaType.LOCATION.name, title = f.name, body = f.description, tags = f.kind))
         toast("Saved ${f.name} to Ideas")
     }
+
+    // ---------- Monsters ----------
+
+    private val _monsterReq = MutableStateFlow(MonsterRequest())
+    val monsterRequest: StateFlow<MonsterRequest> = _monsterReq.asStateFlow()
+
+    fun clearMonsterRequest() { _monsterReq.value = MonsterRequest() }
+
+    private fun runMonster(f: suspend () -> StatBlock) {
+        _monsterReq.value = MonsterRequest(loading = true)
+        viewModelScope.launch {
+            _monsterReq.value = try { MonsterRequest(result = f()) } catch (e: Exception) { MonsterRequest(error = friendly(e)) }
+        }
+    }
+
+    fun scanMonster(images: List<ImagePart>) = runMonster { MonsterForge.fromPhotos(ai.value, images) }
+    fun pasteMonster(text: String) = runMonster { MonsterForge.fromText(ai.value, text) }
+    fun createMonster(idea: String) = runMonster {
+        val c = campaign.value
+        MonsterForge.generate(ai.value, idea, listOfNotNull(c?.name, c?.setting, c?.tone).filter { it.isNotBlank() }.joinToString(" · "))
+    }
+
+    /** Saves a stat block; new monsters start at full HP. Calls back with the row id. */
+    fun saveMonster(existing: Monster?, b: StatBlock, onSaved: (Long) -> Unit = {}) = viewModelScope.launch {
+        val hpChanged = existing == null || existing.data.let { StatBlock.fromJson(it).hp } != b.hp
+        val row = (existing ?: Monster(campaignId = campaignId.value, name = "", cr = "", data = "", hpNow = null)).copy(
+            name = b.name.trim(), cr = b.cr, data = b.toJson(),
+            hpNow = if (hpChanged || existing?.hpNow == null) b.maxHp else existing?.hpNow,
+        )
+        val id = db.monsters().upsert(row)
+        onSaved(if (row.id == 0L) id else row.id)
+    }
+
+    fun setMonsterHp(m: Monster, hp: Int?) = viewModelScope.launch { db.monsters().setHp(m.id, hp) }
+    fun deleteMonster(m: Monster) = viewModelScope.launch { db.monsters().delete(m) }
 }
+
+data class MonsterRequest(val loading: Boolean = false, val error: String? = null, val result: StatBlock? = null)

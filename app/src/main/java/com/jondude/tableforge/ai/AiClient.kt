@@ -12,26 +12,35 @@ import java.net.URL
 
 class AiException(message: String) : IOException(message)
 
+/** A JPEG/PNG image sent with the prompt, base64 encoded (no data: prefix). */
+data class ImagePart(val mediaType: String, val base64: String)
+
 /** Sends one system + user prompt to the configured model and returns the raw text reply. */
 object AiClient {
 
-    suspend fun complete(settings: AiSettings, system: String, user: String, maxTokens: Int = 3000): String =
+    suspend fun complete(
+        settings: AiSettings,
+        system: String,
+        user: String,
+        maxTokens: Int = 3000,
+        images: List<ImagePart> = emptyList(),
+    ): String =
         withContext(Dispatchers.IO) {
             when (settings.provider) {
-                AiProvider.CLAUDE -> claude(settings, system, user, maxTokens)
-                AiProvider.OLLAMA -> ollama(settings, system, user)
+                AiProvider.CLAUDE -> claude(settings, system, user, maxTokens, images)
+                AiProvider.OLLAMA -> ollama(settings, system, user, images)
                 AiProvider.OFFLINE -> throw AiException("Offline mode has no AI model. Pick Claude or Ollama in Settings.")
             }
         }
 
-    private fun claude(s: AiSettings, system: String, user: String, maxTokens: Int): String {
+    private fun claude(s: AiSettings, system: String, user: String, maxTokens: Int, images: List<ImagePart>): String {
         if (s.claudeKey.isBlank()) throw AiException("Add your Claude API key in Settings.")
         val body = JSONObject()
             .put("model", s.claudeModel.ifBlank { AiSettings.DEFAULT_CLAUDE_MODEL })
             .put("max_tokens", maxTokens)
             // No temperature: newer Claude models reject it ("temperature is deprecated").
             .put("system", system)
-            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", user)))
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", claudeContent(user, images))))
         val json = post(
             "https://api.anthropic.com/v1/messages", body,
             mapOf("x-api-key" to s.claudeKey, "anthropic-version" to "2023-06-01"),
@@ -46,7 +55,21 @@ object AiClient {
         return sb.toString()
     }
 
-    private fun ollama(s: AiSettings, system: String, user: String): String {
+    private fun claudeContent(user: String, images: List<ImagePart>): Any {
+        if (images.isEmpty()) return user
+        val arr = JSONArray()
+        images.forEach { im ->
+            arr.put(
+                JSONObject().put("type", "image").put(
+                    "source",
+                    JSONObject().put("type", "base64").put("media_type", im.mediaType).put("data", im.base64),
+                ),
+            )
+        }
+        return arr.put(JSONObject().put("type", "text").put("text", user))
+    }
+
+    private fun ollama(s: AiSettings, system: String, user: String, images: List<ImagePart>): String {
         val base = s.ollamaUrl.trim().trimEnd('/')
         if (base.isBlank()) throw AiException("Add your Ollama server address in Settings.")
         val body = JSONObject()
@@ -57,7 +80,12 @@ object AiClient {
             .put(
                 "messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", system))
-                    .put(JSONObject().put("role", "user").put("content", user)),
+                    .put(
+                        JSONObject().put("role", "user").put("content", user).apply {
+                            // Vision models (e.g. llava, llama3.2-vision) read images this way.
+                            if (images.isNotEmpty()) put("images", JSONArray(images.map { it.base64 }))
+                        },
+                    ),
             )
         val json = post("$base/api/chat", body, emptyMap(), timeoutMs = 300_000)
         return json.optJSONObject("message")?.optString("content")

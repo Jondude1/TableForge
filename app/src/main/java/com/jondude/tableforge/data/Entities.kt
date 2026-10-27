@@ -252,3 +252,15 @@ enum class Terrain(val code: Char, val label: String, val argb: Long) {
         }
     }
 }
+
+/** A monster stat block. The block itself is stored as JSON in [data] (see StatBlock). */
+@Entity(tableName = "monsters", indices = [Index("campaignId")])
+data class Monster(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val campaignId: Long,
+    val name: String,
+    val cr: String,
+    val data: String,
+    val hpNow: Int?,
+    val createdAt: Long = System.currentTimeMillis(),
+)

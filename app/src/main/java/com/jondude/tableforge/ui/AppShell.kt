@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Diamond
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -67,6 +68,7 @@ enum class AppTab(val label: String, val icon: ImageVector) {
     IDEAS("Ideas", Icons.Outlined.Lightbulb),
     CONCEPTS("Concepts", Icons.Outlined.AccountTree),
     MAPS("Maps", Icons.Outlined.Map),
+    MONSTERS("Monsters", Icons.Outlined.Pets),
     LOOT("Loot", Icons.Outlined.Diamond),
     TABLES("Tables", Icons.Outlined.Casino),
     SETTINGS("Settings", Icons.Outlined.Settings),
@@ -140,6 +142,7 @@ fun AppShell(vm: AppViewModel = viewModel()) {
                             AppTab.IDEAS -> IdeasScreen(vm, wide)
                             AppTab.CONCEPTS -> ConceptMapScreen(vm, wide)
                             AppTab.MAPS -> TileMapScreen(vm, wide)
+                            AppTab.MONSTERS -> MonstersScreen(vm, wide)
                             AppTab.LOOT -> PartyScreen(vm, wide)
                             AppTab.TABLES -> TablesScreen(vm, wide)
                             AppTab.SETTINGS -> SettingsScreen(vm)
